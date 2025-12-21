@@ -14,11 +14,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 let rooms = {};
 
 // Helper: Ambil list user di dalam voice room
-function getVoiceUsers(roomId) {
+function getVoiceParticipants(roomId) {
     const room = rooms[roomId];
     if (!room) return [];
-    // Filter user yang sedang join voice
-    return room.users.filter(u => u.isInVoice).map(u => u.id);
+    // Kembalikan nama dan role untuk ditampilkan di Avatar
+    return room.users
+        .filter(u => u.isInVoice)
+        .map(u => ({ id: u.id, name: u.name, role: u.role }));
 }
 
 io.on('connection', (socket) => {
@@ -77,6 +79,7 @@ io.on('connection', (socket) => {
         // Notifikasi ke Room
         io.to(roomId).emit('chat_message', { type: 'sys', text: `👋 ${name} bergabung.` });
         io.to(roomId).emit('update_user_count', room.users.length); // +1 Sensei
+        socket.emit('voice_status_update', getVoiceParticipants(roomId));
     });
 
     // 3. UPDATE MATERI (Sensei Only)
@@ -139,25 +142,31 @@ io.on('connection', (socket) => {
         const room = rooms[roomId];
         if (!room) return;
 
-        // Tandai user ini sedang di voice
+        // 1. Update status user
         const user = room.users.find(u => u.id === socket.id);
         if (user) user.isInVoice = true;
 
-        // Beritahu user lain di room ini untuk "menelepon" user baru ini
-        // Kita kirim list user lain yang SUDAH ada di voice, biar user baru yang initiate call
+        // 2. Beritahu WebRTC Signaling (untuk koneksi audio)
         const usersInVoice = room.users.filter(u => u.isInVoice && u.id !== socket.id);
         socket.emit('voice_users_list', usersInVoice.map(u => u.id));
+
+        // 3. Beritahu UI Semua Orang (untuk update Avatar Bubble)
+        io.to(roomId).emit('voice_status_update', getVoiceParticipants(roomId));
     });
 
     // 2. User Mematikan Mic (Leave Voice)
     socket.on('leave_voice', ({ roomId }) => {
         const room = rooms[roomId];
         if (!room) return;
+        
         const user = room.users.find(u => u.id === socket.id);
         if (user) user.isInVoice = false;
         
-        // Beritahu semua orang untuk memutus koneksi dengan user ini
+        // Putus koneksi audio
         socket.to(roomId).emit('user_left_voice', socket.id);
+        
+        // Update UI Avatar
+        io.to(roomId).emit('voice_status_update', getVoiceParticipants(roomId));
     });
 
     // 3. Relay Signal WebRTC (Offer, Answer, ICE Candidate)
@@ -191,9 +200,17 @@ io.on('connection', (socket) => {
             const index = room.users.findIndex(u => u.id === socket.id);
             if (index !== -1) {
                 const user = room.users[index];
+                if (user.isInVoice) {
+                    socket.to(roomId).emit('user_left_voice', socket.id);
+                }
                 room.users.splice(index, 1);
                 io.to(roomId).emit('chat_message', { type: 'sys', text: `➖ ${user.name} keluar.` });
-                io.to(roomId).emit('update_user_count', room.users.length + 1);
+                io.to(roomId).emit('update_user_count', room.users.length);
+                
+                // Update UI Avatar jika dia tadi di voice
+                if (user.isInVoice) {
+                    io.to(roomId).emit('voice_status_update', getVoiceParticipants(roomId));
+                }
                 break;
             }
         }
@@ -212,4 +229,3 @@ function getPublicRooms() {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
