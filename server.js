@@ -28,7 +28,7 @@ io.on('connection', (socket) => {
     // 1. BUAT KELAS (Sensei)
     socket.on('create_room', ({ name, roomId, password }) => {
         if (rooms[roomId]) {
-            return socket.emit('error_msg', '❌ Room ID sudah digunakan!');
+            return socket.emit('error_msg', '❌ Room ID Used/Dipakai!');
         }
 
         rooms[roomId] = {
@@ -61,8 +61,8 @@ io.on('connection', (socket) => {
     socket.on('join_room', ({ name, roomId, password }) => {
         const room = rooms[roomId];
 
-        if (!room) return socket.emit('error_msg', '❌ Room tidak ditemukan.');
-        if (room.password && room.password !== password) return socket.emit('error_msg', '🔒 Password salah!');
+        if (!room) return socket.emit('error_msg', '❌ Room Not Found/Tidak Ada');
+        if (room.password && room.password !== password) return socket.emit('error_msg', '🔒 Wrong Password/Salah');
 
         room.users.push({ id: socket.id, name: name, role: 'student', isInVoice: false });
         socket.join(roomId);
@@ -77,8 +77,12 @@ io.on('connection', (socket) => {
         });
 
         // Notifikasi ke Room
-        io.to(roomId).emit('chat_message', { type: 'sys', text: `👋 ${name} bergabung.` });
-        io.to(roomId).emit('update_user_count', room.users.length); // +1 Sensei
+        io.to(roomId).emit('chat_message', { 
+            type: 'sys', 
+            msgCode: 'join', // Kode untuk diterjemahkan client
+            user: name 
+        });
+        io.to(roomId).emit('update_user_count', room.users.length);
         socket.emit('voice_status_update', getVoiceParticipants(roomId));
     });
 
@@ -118,7 +122,7 @@ io.on('connection', (socket) => {
             // Jawaban Benar
             io.to(roomId).emit('chat_message', { 
                 type: 'sys-succ', 
-                text: `🎉 ${sender} menjawab BENAR!`,
+                msgCode: 'correct',
                 sender: 'SISTEM'
             });
         } else {
@@ -190,7 +194,7 @@ io.on('connection', (socket) => {
             
             // Jika Sensei keluar
             if (room.sensei === socket.id) {
-                io.to(roomId).emit('force_leave', 'Sensei telah menutup kelas.');
+                io.to(roomId).emit('force_leave', 'Sensei has closed the class/Sensei telah menutup kelas.');
                 delete rooms[roomId];
                 io.emit('update_public_rooms', getPublicRooms());
                 break;
@@ -204,7 +208,11 @@ io.on('connection', (socket) => {
                     socket.to(roomId).emit('user_left_voice', socket.id);
                 }
                 room.users.splice(index, 1);
-                io.to(roomId).emit('chat_message', { type: 'sys', text: `➖ ${user.name} keluar.` });
+                io.to(roomId).emit('chat_message', { 
+                    type: 'sys', 
+                    msgCode: 'leave', 
+                    user: user.name 
+                });
                 io.to(roomId).emit('update_user_count', room.users.length);
                 
                 // Update UI Avatar jika dia tadi di voice
