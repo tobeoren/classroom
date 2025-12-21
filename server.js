@@ -13,6 +13,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Format: { roomId: { sensei: socketId, users: [], currentQuestion: {}, isAnswerHidden: true, password: '', isPublic: true } }
 let rooms = {};
 
+// Helper: Ambil list user di dalam voice room
+function getVoiceUsers(roomId) {
+    const room = rooms[roomId];
+    if (!room) return [];
+    // Filter user yang sedang join voice
+    return room.users.filter(u => u.isInVoice).map(u => u.id);
+}
+
 io.on('connection', (socket) => {
     
     // 1. BUAT KELAS (Sensei)
@@ -30,6 +38,9 @@ io.on('connection', (socket) => {
             isAnswerHidden: true, // Default hidden
             isPublic: !password
         };
+
+        // Masukkan Sensei ke list users juga biar seragam
+        rooms[roomId].users.push({ id: socket.id, name: name, role: 'sensei', isInVoice: false });
 
         socket.join(roomId);
         // Kirim konfirmasi ke pembuat
@@ -51,7 +62,7 @@ io.on('connection', (socket) => {
         if (!room) return socket.emit('error_msg', '❌ Room tidak ditemukan.');
         if (room.password && room.password !== password) return socket.emit('error_msg', '🔒 Password salah!');
 
-        room.users.push({ id: socket.id, name: name });
+        room.users.push({ id: socket.id, name: name, role: 'student', isInVoice: false });
         socket.join(roomId);
 
         // Kirim status terkini ke siswa (Sync)
@@ -118,6 +129,45 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('get_public_rooms', () => { socket.emit('update_public_rooms', getPublicRooms()); });
+
+
+    // --- FITUR BARU: VOICE ROOM (WebRTC Signaling) ---
+    
+    // 1. User Mengaktifkan Mic (Join Voice)
+    socket.on('join_voice', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+
+        // Tandai user ini sedang di voice
+        const user = room.users.find(u => u.id === socket.id);
+        if (user) user.isInVoice = true;
+
+        // Beritahu user lain di room ini untuk "menelepon" user baru ini
+        // Kita kirim list user lain yang SUDAH ada di voice, biar user baru yang initiate call
+        const usersInVoice = room.users.filter(u => u.isInVoice && u.id !== socket.id);
+        socket.emit('voice_users_list', usersInVoice.map(u => u.id));
+    });
+
+    // 2. User Mematikan Mic (Leave Voice)
+    socket.on('leave_voice', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (!room) return;
+        const user = room.users.find(u => u.id === socket.id);
+        if (user) user.isInVoice = false;
+        
+        // Beritahu semua orang untuk memutus koneksi dengan user ini
+        socket.to(roomId).emit('user_left_voice', socket.id);
+    });
+
+    // 3. Relay Signal WebRTC (Offer, Answer, ICE Candidate)
+    socket.on('voice_signal', ({ targetId, signalData }) => {
+        io.to(targetId).emit('voice_signal', {
+            senderId: socket.id,
+            signalData: signalData
+        });
+    });
+
     // 6. REQUEST PUBLIC LIST
     socket.on('get_public_rooms', () => {
         socket.emit('update_public_rooms', getPublicRooms());
@@ -162,4 +212,3 @@ function getPublicRooms() {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
