@@ -76,7 +76,7 @@ io.on('connection', (socket) => {
 
         // Notifikasi ke Room
         io.to(roomId).emit('chat_message', { type: 'sys', text: `👋 ${name} bergabung.` });
-        io.to(roomId).emit('update_user_count', room.users.length + 1); // +1 Sensei
+        io.to(roomId).emit('update_user_count', room.users.length); // +1 Sensei
     });
 
     // 3. UPDATE MATERI (Sensei Only)
@@ -212,3 +212,4 @@ function getPublicRooms() {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
