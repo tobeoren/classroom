@@ -104,7 +104,7 @@ io.on('connection', (socket) => {
             // Jawaban Benar
             io.to(roomId).emit('chat_message', { 
                 type: 'sys-succ', 
-                text: `🎉 ${sender} menjawab BENAR! (${room.currentQuestion.a[0]})`,
+                text: `🎉 ${sender} menjawab BENAR!`,
                 sender: 'SISTEM'
             });
         } else {
@@ -162,3 +162,4 @@ function getPublicRooms() {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
