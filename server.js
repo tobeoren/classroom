@@ -36,6 +36,8 @@ io.on('connection', (socket) => {
             if (rooms[roomId].senseiName === name) {
                 // Sensei yang sama kembali lagi (reconnect)
                 rooms[roomId].sensei = socket.id; // Update socket ID terbaru
+                const sIdx = rooms[roomId].users.findIndex(u => u.name === name && u.role === 'sensei');
+                if(sIdx !== -1) rooms[roomId].users[sIdx].id = socket.id;
                 socket.join(roomId);
                 
                 return socket.emit('room_joined', { 
@@ -154,9 +156,6 @@ io.on('connection', (socket) => {
             });
         }
     });
-
-    socket.on('get_public_rooms', () => { socket.emit('update_public_rooms', getPublicRooms()); });
-
 
     // --- FITUR BARU: VOICE ROOM (WebRTC Signaling) ---
     
