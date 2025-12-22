@@ -33,26 +33,29 @@ io.on('connection', (socket) => {
     socket.on('create_room', ({ name, roomId, password, deviceId }) => { // TAMBAHKAN deviceId di sini
     // CEK RECONNECT: Jika room ada, cek apakah namanya sama
         if (rooms[roomId]) {
-            if (rooms[roomId].senseiName === name) {
-                // SENSEI RECONNECT
-                if (rooms[roomId].senseiDeviceId !== deviceId) {
-                    return socket.emit('error_msg', '❌ Keamanan: Anda bukan pemilik asli room ini!');
-                }
-                
-                rooms[roomId].sensei = socket.id;
-                const sIdx = rooms[roomId].users.findIndex(u => u.name === name && u.role === 'sensei');
-                if(sIdx !== -1) rooms[roomId].users[sIdx].id = socket.id;
+            const room = rooms[roomId];
+                if (room.senseiName === name) {
+                // VERIFIKASI PERANGKAT: Bandingkan ID perangkat yang tersimpan dengan yang baru dikirim
+                if (room.senseiDeviceId === deviceId) {
+                    room.sensei = socket.id; // Update socket ID baru ke perangkat lama
+                    
+                    // Update socket ID di daftar users agar voice/chat sinkron
+                    const sIdx = room.users.findIndex(u => u.name === name && u.role === 'sensei');
+                    if(sIdx !== -1) room.users[sIdx].id = socket.id;
 
-                socket.join(roomId);
-                return socket.emit('room_joined', { 
-                    role: 'sensei', 
-                    roomId, 
-                    name,
-                    currentQuestion: rooms[roomId].currentQuestion,
-                    isAnswerHidden: rooms[roomId].isAnswerHidden
-                });
+                    socket.join(roomId);
+                    return socket.emit('room_joined', { 
+                        role: 'sensei', roomId, name,
+                        currentQuestion: room.currentQuestion,
+                        isAnswerHidden: room.isAnswerHidden
+                    });
+                } else {
+                    // NAMA SAMA TAPI PERANGKAT BEDA: Upaya pembajakan detected!
+                    return socket.emit('error_msg', '⚠️ KEAMANAN: Nama Sensei ini sudah terkunci pada perangkat lain. Gunakan nama/ID lain!');
+                }
             }
-            return socket.emit('error_msg', '❌ Room ID sudah digunakan!');
+            // 3. Jika Room ID sama tapi nama beda sama sekali
+            return socket.emit('error_msg', '❌ Room ID ini sudah digunakan oleh Sensei lain!');
         }
 
         rooms[roomId] = {
