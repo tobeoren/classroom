@@ -35,28 +35,25 @@ io.on('connection', (socket) => {
         if (rooms[roomId]) {
             const room = rooms[roomId];
                 if (room.senseiName === name) {
-                // VERIFIKASI PERANGKAT: Bandingkan ID perangkat yang tersimpan dengan yang baru dikirim
-                if (room.senseiDeviceId === deviceId) {
-                    room.sensei = socket.id; // Update socket ID baru ke perangkat lama
-                    
-                    // Update socket ID di daftar users agar voice/chat sinkron
-                    const sIdx = room.users.findIndex(u => u.name === name && u.role === 'sensei');
-                    if(sIdx !== -1) room.users[sIdx].id = socket.id;
+                    // VERIFIKASI PERANGKAT: Jika sidik jari cocok, izinkan update socket
+                    if (room.senseiDeviceId === deviceId) {
+                        room.sensei = socket.id;
+                        const sIdx = room.users.findIndex(u => u.name === name);
+                        if(sIdx !== -1) room.users[sIdx].id = socket.id;
 
-                    socket.join(roomId);
-                    return socket.emit('room_joined', { 
-                        role: 'sensei', roomId, name,
-                        currentQuestion: room.currentQuestion,
-                        isAnswerHidden: room.isAnswerHidden
-                    });
-                } else {
-                    // NAMA SAMA TAPI PERANGKAT BEDA: Upaya pembajakan detected!
-                    return socket.emit('error_msg', '⚠️ KEAMANAN: Nama Sensei ini sudah terkunci pada perangkat lain. Gunakan nama/ID lain!');
+                        socket.join(roomId);
+                        return socket.emit('room_joined', { 
+                            role: 'sensei', roomId, name,
+                            currentQuestion: room.currentQuestion,
+                            isAnswerHidden: room.isAnswerHidden
+                        });
+                    } else {
+                        // SIDIK JARI BEDA: Tolak akses pembajakan!
+                        return socket.emit('error_msg', '⚠️ KEAMANAN: Identitas Sensei ini sudah terkunci pada perangkat lain!');
+                    }
                 }
+                return socket.emit('error_msg', '❌ Room ID sudah digunakan oleh Sensei lain!');
             }
-            // 3. Jika Room ID sama tapi nama beda sama sekali
-            return socket.emit('error_msg', '❌ Room ID ini sudah digunakan oleh Sensei lain!');
-        }
 
         rooms[roomId] = {
             sensei: socket.id,
@@ -70,7 +67,7 @@ io.on('connection', (socket) => {
         };
 
         // Masukkan Sensei ke list users juga biar seragam
-        rooms[roomId].users.push({ id: socket.id, name: name, role: 'sensei', isInVoice: false });
+        rooms[roomId].users.push({ id: socket.id, name: name, role: 'sensei', isInVoice: false, deviceId});
 
         socket.join(roomId);
         // Kirim konfirmasi ke pembuat
