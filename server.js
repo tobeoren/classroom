@@ -84,6 +84,18 @@ io.on('connection', (socket) => {
         if (!room) return socket.emit('error_msg', '❌ Room Not Found/Tidak Ada');
         if (room.password && room.password !== password) return socket.emit('error_msg', '🔒 Wrong Password/Salah');
 
+        // CEK RECONNECT SISWA: Jika nama sudah ada, update saja socket ID-nya tanpa kirim notifikasi join
+        const existingUser = room.users.find(u => u.name === name);
+        if (existingUser) {
+            existingUser.id = socket.id;
+            socket.join(roomId);
+            return socket.emit('room_joined', { 
+                role: 'student', roomId, name, 
+                currentQuestion: room.currentQuestion, 
+                isAnswerHidden: room.isAnswerHidden 
+            });
+        }
+        
         room.users.push({ id: socket.id, name: name, role: 'student', isInVoice: false });
         socket.join(roomId);
 
@@ -228,21 +240,34 @@ io.on('connection', (socket) => {
             const index = room.users.findIndex(u => u.id === socket.id);
             if (index !== -1) {
                 const user = room.users[index];
-                if (user.isInVoice) {
-                    socket.to(roomId).emit('user_left_voice', socket.id);
-                }
-                room.users.splice(index, 1);
-                io.to(roomId).emit('chat_message', { 
-                    type: 'sys', 
-                    msgCode: 'leave', 
-                    user: user.name 
-                });
-                io.to(roomId).emit('update_user_count', room.users.length);
-                
-                // Update UI Avatar jika dia tadi di voice
-                if (user.isInVoice) {
-                    io.to(roomId).emit('voice_status_update', getVoiceParticipants(roomId));
-                }
+                const studentSocketId = socket.id;
+
+                // Beri waktu 15-20 detik sebelum benar-benar dianggap keluar
+                setTimeout(() => {
+                    // Cek apakah siswa tersebut BELUM masuk lagi dengan socket ID baru
+                    const currentRoom = rooms[roomId];
+                    if (currentRoom) {
+                        const isStillGone = !currentRoom.users.some(u => u.name === user.name);
+                        
+                        if (isStillGone) {
+                            if (user.isInVoice) {
+                                socket.to(roomId).emit('user_left_voice', studentSocketId);
+                            }
+                            
+                            // Hapus dari daftar hanya jika memang tidak kembali
+                            const finalIdx = currentRoom.users.findIndex(u => u.id === studentSocketId);
+                            if (finalIdx !== -1) currentRoom.users.splice(finalIdx, 1);
+
+                            io.to(roomId).emit('chat_message', { 
+                                type: 'sys', 
+                                msgCode: 'leave', 
+                                user: user.name 
+                            });
+                            io.to(roomId).emit('update_user_count', currentRoom.users.length);
+                            io.to(roomId).emit('voice_status_update', getVoiceParticipants(roomId));
+                        }
+                    }
+                }, 15000); // 15 detik masa tenggang
                 break;
             }
         }
