@@ -31,7 +31,21 @@ io.on('connection', (socket) => {
     
     // 1. BUAT KELAS (Sensei)
     socket.on('create_room', ({ name, roomId, password }) => {
+    // CEK RECONNECT: Jika room ada, cek apakah namanya sama
         if (rooms[roomId]) {
+            if (rooms[roomId].senseiName === name) {
+                // Sensei yang sama kembali lagi (reconnect)
+                rooms[roomId].sensei = socket.id; // Update socket ID terbaru
+                socket.join(roomId);
+                
+                return socket.emit('room_joined', { 
+                    role: 'sensei', 
+                    roomId, 
+                    name,
+                    currentQuestion: rooms[roomId].currentQuestion,
+                    isAnswerHidden: rooms[roomId].isAnswerHidden
+                });
+            }
             return socket.emit('error_msg', '❌ Room ID Used/Dipakai!');
         }
 
@@ -196,17 +210,18 @@ io.on('connection', (socket) => {
         // Cari user ada di room mana
         for (const roomId in rooms) {
             const room = rooms[roomId];
-            
-            // Jika Sensei keluar
             if (room.sensei === socket.id) {
+                console.log(`Sensei disconnected from ${roomId}. Waiting for reconnect...`);
+                
+                // Beri waktu 1 menit sebelum benar-benar dihapus
                 setTimeout(() => {
-                    const currentRoom = rooms[roomId];
-                    // Jika dalam 30 detik sensei belum login kembali dengan socket baru
-                    if (currentRoom && currentRoom.sensei === socket.id) {
+                    // Cek apakah dalam 60 detik sensei SUDAH update socket.id-nya
+                    if (rooms[roomId] && rooms[roomId].sensei === socket.id) {
                         io.to(roomId).emit('force_leave', 'Sensei has closed the class.');
                         delete rooms[roomId];
+                        io.emit('update_public_rooms', getPublicRooms());
                     }
-                }, 30000); 
+                }, 60000); 
                 break;
             }
 
