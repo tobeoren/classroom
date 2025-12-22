@@ -35,25 +35,22 @@ io.on('connection', (socket) => {
         if (rooms[roomId]) {
             if (rooms[roomId].senseiName === name) {
                 // Sensei yang sama kembali lagi (reconnect)
-                rooms[roomId].sensei = socket.id; // Update socket ID terbaru
-                const sIdx = rooms[roomId].users.findIndex(u => u.name === name && u.role === 'sensei');
-                if(sIdx !== -1) rooms[roomId].users[sIdx].id = socket.id;
-                socket.join(roomId);
+                if (rooms[roomId].senseiDeviceId !== deviceId) {
+                    return socket.emit('error_msg', '❌ Keamanan: Anda bukan pemilik asli room ini!');
+                }
                 
-                return socket.emit('room_joined', { 
-                    role: 'sensei', 
-                    roomId, 
-                    name,
-                    currentQuestion: rooms[roomId].currentQuestion,
-                    isAnswerHidden: rooms[roomId].isAnswerHidden
-                });
+                // Jika Device ID sama, izinkan Reconnect
+                rooms[roomId].sensei = socket.id;
+                socket.join(roomId);
+                return socket.emit('room_joined', { role: 'sensei', roomId, name /* ... data lainnya */ });
             }
-            return socket.emit('error_msg', '❌ Room ID Used/Dipakai!');
+            return socket.emit('error_msg', '❌ Room ID sudah digunakan!');
         }
 
         rooms[roomId] = {
             sensei: socket.id,
             senseiName: name,
+            senseiDeviceId: deviceId,
             users: [],
             password: password || null,
             currentQuestion: { q: '...', a: [], m: '...' },
@@ -83,10 +80,15 @@ io.on('connection', (socket) => {
 
         if (!room) return socket.emit('error_msg', '❌ Room Not Found/Tidak Ada');
         if (room.password && room.password !== password) return socket.emit('error_msg', '🔒 Wrong Password/Salah');
-
+        if (name === room.senseiName) {
+        return socket.emit('error_msg', '❌ Nama ini adalah nama Sensei, gunakan nama lain!');
+    }
         // CEK RECONNECT SISWA: Jika nama sudah ada, update saja socket ID-nya tanpa kirim notifikasi join
         const existingUser = room.users.find(u => u.name === name);
         if (existingUser) {
+            if (existingUser.deviceId !== deviceId) {
+                return socket.emit('error_msg', '❌ Nama sudah digunakan siswa lain, pilih nama unik!');
+            }
             existingUser.id = socket.id;
             socket.join(roomId);
             return socket.emit('room_joined', { 
