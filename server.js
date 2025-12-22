@@ -123,7 +123,8 @@ io.on('connection', (socket) => {
             io.to(roomId).emit('chat_message', { 
                 type: 'sys-succ', 
                 msgCode: 'correct',
-                sender: 'SISTEM'
+                sender: 'SISTEM',
+                user: sender
             });
         } else {
             // Chat Biasa
@@ -237,3 +238,4 @@ function getPublicRooms() {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
