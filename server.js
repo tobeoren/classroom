@@ -5,7 +5,11 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, { 
+    cors: { origin: "*" },
+    pingTimeout: 60000, // Tunggu 60 detik sebelum dianggap mati
+    pingInterval: 25000 // Kirim ping setiap 25 detik
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -195,9 +199,14 @@ io.on('connection', (socket) => {
             
             // Jika Sensei keluar
             if (room.sensei === socket.id) {
-                io.to(roomId).emit('force_leave', 'Sensei has closed the class/Sensei telah menutup kelas.');
-                delete rooms[roomId];
-                io.emit('update_public_rooms', getPublicRooms());
+                setTimeout(() => {
+                    const currentRoom = rooms[roomId];
+                    // Jika dalam 30 detik sensei belum login kembali dengan socket baru
+                    if (currentRoom && currentRoom.sensei === socket.id) {
+                        io.to(roomId).emit('force_leave', 'Sensei has closed the class.');
+                        delete rooms[roomId];
+                    }
+                }, 30000); 
                 break;
             }
 
@@ -238,4 +247,3 @@ function getPublicRooms() {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
