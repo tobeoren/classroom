@@ -30,19 +30,27 @@ function getVoiceParticipants(roomId) {
 io.on('connection', (socket) => {
     
     // 1. BUAT KELAS (Sensei)
-    socket.on('create_room', ({ name, roomId, password }) => {
+    socket.on('create_room', ({ name, roomId, password, deviceId }) => { // TAMBAHKAN deviceId di sini
     // CEK RECONNECT: Jika room ada, cek apakah namanya sama
         if (rooms[roomId]) {
             if (rooms[roomId].senseiName === name) {
-                // Sensei yang sama kembali lagi (reconnect)
+                // SENSEI RECONNECT
                 if (rooms[roomId].senseiDeviceId !== deviceId) {
                     return socket.emit('error_msg', '❌ Keamanan: Anda bukan pemilik asli room ini!');
                 }
                 
-                // Jika Device ID sama, izinkan Reconnect
                 rooms[roomId].sensei = socket.id;
+                const sIdx = rooms[roomId].users.findIndex(u => u.name === name && u.role === 'sensei');
+                if(sIdx !== -1) rooms[roomId].users[sIdx].id = socket.id;
+
                 socket.join(roomId);
-                return socket.emit('room_joined', { role: 'sensei', roomId, name /* ... data lainnya */ });
+                return socket.emit('room_joined', { 
+                    role: 'sensei', 
+                    roomId, 
+                    name,
+                    currentQuestion: rooms[roomId].currentQuestion,
+                    isAnswerHidden: rooms[roomId].isAnswerHidden
+                });
             }
             return socket.emit('error_msg', '❌ Room ID sudah digunakan!');
         }
@@ -75,17 +83,18 @@ io.on('connection', (socket) => {
     });
 
     // 2. GABUNG KELAS (Siswa)
-    socket.on('join_room', ({ name, roomId, password }) => {
+    socket.on('join_room', ({ name, roomId, password, deviceId }) => { // TAMBAHKAN deviceId di sini
         const room = rooms[roomId];
-
         if (!room) return socket.emit('error_msg', '❌ Room Not Found/Tidak Ada');
         if (room.password && room.password !== password) return socket.emit('error_msg', '🔒 Wrong Password/Salah');
+        
         if (name === room.senseiName) {
-        return socket.emit('error_msg', '❌ Nama ini adalah nama Sensei, gunakan nama lain!');
-    }
-        // CEK RECONNECT SISWA: Jika nama sudah ada, update saja socket ID-nya tanpa kirim notifikasi join
+            return socket.emit('error_msg', '❌ Nama ini adalah nama Sensei, gunakan nama lain!');
+        }
+
         const existingUser = room.users.find(u => u.name === name);
         if (existingUser) {
+            // Validasi Fingerprint Siswa
             if (existingUser.deviceId !== deviceId) {
                 return socket.emit('error_msg', '❌ Nama sudah digunakan siswa lain, pilih nama unik!');
             }
@@ -98,7 +107,7 @@ io.on('connection', (socket) => {
             });
         }
         
-        room.users.push({ id: socket.id, name: name, role: 'student', isInVoice: false });
+        room.users.push({ id: socket.id, name: name, deviceId: deviceId, role: 'student', isInVoice: false });
         socket.join(roomId);
 
         // Kirim status terkini ke siswa (Sync)
