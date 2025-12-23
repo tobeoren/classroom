@@ -33,20 +33,6 @@ io.on('connection', (socket) => {
     // 1. BUAT KELAS (Sensei)
     socket.on('create_room', ({ name, roomId, password, deviceId }) => { // TAMBAHKAN deviceId di sini
     // CEK RECONNECT: Jika room ada, cek apakah namanya sama
-        const room = rooms[roomId];
-        if (!room) return socket.emit('error_msg', '❌ Room Not Found');
-
-        // A. Cek Kick Permanen
-        if (room.bannedDevices && room.bannedDevices.includes(deviceId)) {
-            return socket.emit('error_msg', '🚫 Anda dilarang masuk ke kelas ini secara permanen.');
-        }
-
-        // B. Cek Kick Temporary
-        const banKey = `${roomId}_${deviceId}`;
-        if (tempBans[banKey] && Date.now() < tempBans[banKey]) {
-            const remaining = Math.ceil((tempBans[banKey] - Date.now()) / 60000);
-            return socket.emit('error_msg', `⏰ Anda masih dilarang masuk selama ${remaining} menit lagi.`);
-        }
         if (rooms[roomId]) {
             const room = rooms[roomId];
                 if (room.senseiName === name) {
@@ -95,7 +81,6 @@ io.on('connection', (socket) => {
         });
 
         io.emit('update_public_rooms', getPublicRooms());
-        io.to(roomId).emit('update_student_manager_list', room.users);
     });
 
     // 2. GABUNG KELAS (Siswa)
@@ -106,6 +91,11 @@ io.on('connection', (socket) => {
         // Cek Kick Permanen (Berdasarkan Fingerprint atau Nama)
         if (room.bannedDevices && room.bannedDevices.includes(deviceId)) {
             return socket.emit('error_msg', '🚫 Anda dilarang masuk ke kelas ini secara permanen.');
+        }
+        const banKey = `${roomId}_${deviceId}`;
+        if (tempBans[banKey] && Date.now() < tempBans[banKey]) {
+            const remaining = Math.ceil((tempBans[banKey] - Date.now()) / 60000);
+            return socket.emit('error_msg', `⏰ Anda masih dilarang masuk selama ${remaining} menit lagi.`);
         }
         if (room.password && room.password !== password) return socket.emit('error_msg', '🔒 Wrong Password/Salah');
         
