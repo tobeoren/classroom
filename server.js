@@ -198,9 +198,8 @@ io.on('connection', (socket) => {
             const minutes = parseInt(duration) || 1;
             io.to(targetSocketId).emit('force_leave', `⏰ Anda dikeluarkan selama ${minutes} menit.`);
         }
+        io.to(roomId).emit('update_student_manager_list', room.users);
     });
-
-    io.to(roomId).emit('update_student_manager_list', room.users);
 
     // Aksi Mute Remote
     socket.on('admin_toggle_mute', ({ roomId, targetSocketId, muteState }) => {
@@ -212,6 +211,7 @@ io.on('connection', (socket) => {
         
         // Broadcast ke sensei saja untuk update UI realtime (jika diperlukan)
         // Namun kita akan gunakan broadcast room_users_update untuk reaktovitas penuh
+        socket.emit('update_student_manager_list', room.users);
     });
 
     // Request daftar siswa untuk manager
@@ -239,6 +239,8 @@ io.on('connection', (socket) => {
 
         // 3. Beritahu UI Semua Orang (untuk update Avatar Bubble)
         io.to(roomId).emit('voice_status_update', getVoiceParticipants(roomId));
+
+        io.to(roomId).emit('update_student_manager_list', room.users);
     });
 
     // 2. User Mematikan Mic (Leave Voice)
@@ -254,6 +256,8 @@ io.on('connection', (socket) => {
         
         // Update UI Avatar
         io.to(roomId).emit('voice_status_update', getVoiceParticipants(roomId));
+
+        io.to(roomId).emit('update_student_manager_list', room.users);
     });
 
     // 3. Relay Signal WebRTC (Offer, Answer, ICE Candidate)
