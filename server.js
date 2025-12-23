@@ -16,6 +16,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- MEMORY STORAGE ---
 // Format: { roomId: { sensei: socketId, users: [], currentQuestion: {}, isAnswerHidden: true, password: '', isPublic: true } }
 let rooms = {};
+let tempBans = {};
 
 // Helper: Ambil list user di dalam voice room
 function getVoiceParticipants(roomId) {
@@ -32,6 +33,20 @@ io.on('connection', (socket) => {
     // 1. BUAT KELAS (Sensei)
     socket.on('create_room', ({ name, roomId, password, deviceId }) => { // TAMBAHKAN deviceId di sini
     // CEK RECONNECT: Jika room ada, cek apakah namanya sama
+        const room = rooms[roomId];
+        if (!room) return socket.emit('error_msg', '❌ Room Not Found');
+
+        // A. Cek Kick Permanen
+        if (room.bannedDevices && room.bannedDevices.includes(deviceId)) {
+            return socket.emit('error_msg', '🚫 Anda dilarang masuk ke kelas ini secara permanen.');
+        }
+
+        // B. Cek Kick Temporary
+        const banKey = `${roomId}_${deviceId}`;
+        if (tempBans[banKey] && Date.now() < tempBans[banKey]) {
+            const remaining = Math.ceil((tempBans[banKey] - Date.now()) / 60000);
+            return socket.emit('error_msg', `⏰ Anda masih dilarang masuk selama ${remaining} menit lagi.`);
+        }
         if (rooms[roomId]) {
             const room = rooms[roomId];
                 if (room.senseiName === name) {
@@ -80,6 +95,7 @@ io.on('connection', (socket) => {
         });
 
         io.emit('update_public_rooms', getPublicRooms());
+        io.to(roomId).emit('update_student_manager_list', room.users);
     });
 
     // 2. GABUNG KELAS (Siswa)
@@ -186,18 +202,26 @@ io.on('connection', (socket) => {
     });
 
     // Aksi Kick
-    socket.on('admin_kick_user', ({ roomId, targetSocketId, type, duration, name, deviceId }) => {
+    socket.on('admin_kick_user', ({ roomId, targetSocketId, type, duration, deviceId }) => {
         const room = rooms[roomId];
         if (!room || room.sensei !== socket.id) return;
 
         if (type === 'permanent') {
             if (!room.bannedDevices) room.bannedDevices = [];
             room.bannedDevices.push(deviceId);
-            io.to(targetSocketId).emit('force_leave', '🚫 Anda telah di-banned permanen dari kelas ini.');
+            io.to(targetSocketId).emit('force_leave', '🚫 Anda telah di-banned permanen.');
         } else {
             const minutes = parseInt(duration) || 1;
+            const banKey = `${roomId}_${deviceId}`;
+            tempBans[banKey] = Date.now() + (minutes * 60000); // Set waktu buka ban
             io.to(targetSocketId).emit('force_leave', `⏰ Anda dikeluarkan selama ${minutes} menit.`);
         }
+        
+        // Hapus user dari memory room segera
+        const idx = room.users.findIndex(u => u.id === targetSocketId);
+        if(idx !== -1) room.users.splice(idx, 1);
+
+        io.to(roomId).emit('update_user_count', room.users.length);
         io.to(roomId).emit('update_student_manager_list', room.users);
     });
 
@@ -205,13 +229,13 @@ io.on('connection', (socket) => {
     socket.on('admin_toggle_mute', ({ roomId, targetSocketId, muteState }) => {
         const room = rooms[roomId];
         if (!room || room.sensei !== socket.id) return;
-        
-        // Kirim perintah ke siswa spesifik
+
+        // Update state di server agar data yang dikirim ke Sensei selalu terbaru
+        const user = room.users.find(u => u.id === targetSocketId);
+        if (user) user.isMutedBySensei = muteState; // Kita tambah properti baru
+
         io.to(targetSocketId).emit('remote_mute_control', muteState);
-        
-        // Broadcast ke sensei saja untuk update UI realtime (jika diperlukan)
-        // Namun kita akan gunakan broadcast room_users_update untuk reaktovitas penuh
-        socket.emit('update_student_manager_list', room.users);
+        io.to(roomId).emit('update_student_manager_list', room.users);
     });
 
     // Request daftar siswa untuk manager
@@ -324,7 +348,7 @@ io.on('connection', (socket) => {
                             io.to(roomId).emit('voice_status_update', getVoiceParticipants(roomId));
                         }
                     }
-                }, 15000); // 15 detik masa tenggang
+                }, 7000); // 7 detik masa tenggang
                 break;
             }
         }
