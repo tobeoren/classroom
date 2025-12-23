@@ -215,6 +215,20 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('update_student_manager_list', room.users);
     });
 
+    socket.on('student_leave_manual', ({ roomId }) => {
+        const room = rooms[roomId];
+        if (room) {
+            const idx = room.users.findIndex(u => u.id === socket.id);
+            if (idx !== -1) {
+                const userName = room.users[idx].name;
+                room.users.splice(idx, 1); // Hapus INSTAN
+                io.to(roomId).emit('update_user_count', room.users.length);
+                io.to(roomId).emit('update_student_manager_list', room.users);
+                io.to(roomId).emit('chat_message', { type: 'sys', msgCode: 'leave', user: userName });
+            }
+        }
+    });
+
     // Aksi Mute Remote
     socket.on('admin_toggle_mute', ({ roomId, targetSocketId, muteState }) => {
         const room = rooms[roomId];
