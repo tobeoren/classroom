@@ -180,6 +180,31 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Aksi Kick
+    socket.on('admin_kick_user', ({ roomId, targetSocketId }) => {
+        const room = rooms[roomId];
+        if (!room || room.sensei !== socket.id) return;
+
+        io.to(targetSocketId).emit('force_leave', 'Anda telah dikeluarkan dari kelas oleh Sensei.');
+        // Socket target akan terputus otomatis karena reload di sisi client
+    });
+
+    // Aksi Mute Remote
+    socket.on('admin_mute_user', ({ roomId, targetSocketId }) => {
+        const room = rooms[roomId];
+        if (!room || room.sensei !== socket.id) return;
+
+        io.to(targetSocketId).emit('remote_mute_trigger');
+    });
+
+    // Request daftar siswa untuk manager
+    socket.on('get_student_list', (roomId) => {
+        const room = rooms[roomId];
+        if (!room || room.sensei !== socket.id) return;
+        
+        socket.emit('update_student_manager_list', room.users);
+    });
+
     // --- FITUR BARU: VOICE ROOM (WebRTC Signaling) ---
     
     // 1. User Mengaktifkan Mic (Join Voice)
