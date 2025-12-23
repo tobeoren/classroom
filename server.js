@@ -60,6 +60,7 @@ io.on('connection', (socket) => {
             sensei: socket.id,
             senseiName: name,
             senseiDeviceId: deviceId,
+            isMicLocked: false,
             users: [],
             password: password || null,
             currentQuestion: { q: '...', a: [], m: '...' },
@@ -229,6 +230,30 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 1. Fitur Mute All
+    socket.on('admin_mute_all', ({ roomId, muteState }) => {
+        const room = rooms[roomId];
+        if (!room || room.sensei !== socket.id) return;
+
+        room.isMicLocked = muteState; // Simpan status kunci di room
+        
+        // Update semua user di room tersebut
+        room.users.forEach(u => {
+            if (u.role === 'student') {
+                u.isMutedBySensei = muteState;
+            }
+        });
+
+        // Kirim perintah ke semua siswa untuk mute & lock mic
+        io.to(roomId).emit('remote_mute_control', { 
+            shouldMute: muteState, 
+            isLocked: muteState 
+        });
+
+        // Update UI Sensei
+        io.to(roomId).emit('update_student_manager_list', room.users);
+    });
+
     // Aksi Mute Remote
     socket.on('admin_toggle_mute', ({ roomId, targetSocketId, muteState }) => {
         const room = rooms[roomId];
@@ -238,8 +263,12 @@ io.on('connection', (socket) => {
         const user = room.users.find(u => u.id === targetSocketId);
         if (user) user.isMutedBySensei = muteState; // Kita tambah properti baru
 
-        io.to(targetSocketId).emit('remote_mute_control', muteState);
-        io.to(roomId).emit('update_student_manager_list', room.users);
+        io.to(targetSocketId).emit('remote_mute_control', { 
+            shouldMute: muteState, 
+            isLocked: muteState // Kunci mic jika di-mute oleh sensei
+        });
+        
+        socket.emit('update_student_manager_list', room.users);
     });
 
     // Request daftar siswa untuk manager
