@@ -85,7 +85,12 @@ io.on('connection', (socket) => {
     // 2. GABUNG KELAS (Siswa)
     socket.on('join_room', ({ name, roomId, password, deviceId }) => { // TAMBAHKAN deviceId di sini
         const room = rooms[roomId];
-        if (!room) return socket.emit('error_msg', '❌ Room Not Found/Tidak Ada');
+        if (!room) return socket.emit('error_msg', '❌ Room Not Found');
+
+        // Cek Kick Permanen (Berdasarkan Fingerprint atau Nama)
+        if (room.bannedDevices && room.bannedDevices.includes(deviceId)) {
+            return socket.emit('error_msg', '🚫 Anda dilarang masuk ke kelas ini secara permanen.');
+        }
         if (room.password && room.password !== password) return socket.emit('error_msg', '🔒 Wrong Password/Salah');
         
         if (name === room.senseiName) {
@@ -181,20 +186,32 @@ io.on('connection', (socket) => {
     });
 
     // Aksi Kick
-    socket.on('admin_kick_user', ({ roomId, targetSocketId }) => {
+    socket.on('admin_kick_user', ({ roomId, targetSocketId, type, duration, name, deviceId }) => {
         const room = rooms[roomId];
         if (!room || room.sensei !== socket.id) return;
 
-        io.to(targetSocketId).emit('force_leave', 'Anda telah dikeluarkan dari kelas oleh Sensei.');
-        // Socket target akan terputus otomatis karena reload di sisi client
+        if (type === 'permanent') {
+            if (!room.bannedDevices) room.bannedDevices = [];
+            room.bannedDevices.push(deviceId);
+            io.to(targetSocketId).emit('force_leave', '🚫 Anda telah di-banned permanen dari kelas ini.');
+        } else {
+            const minutes = parseInt(duration) || 1;
+            io.to(targetSocketId).emit('force_leave', `⏰ Anda dikeluarkan selama ${minutes} menit.`);
+        }
     });
 
+    io.to(roomId).emit('update_student_manager_list', room.users);
+
     // Aksi Mute Remote
-    socket.on('admin_mute_user', ({ roomId, targetSocketId }) => {
+    socket.on('admin_toggle_mute', ({ roomId, targetSocketId, muteState }) => {
         const room = rooms[roomId];
         if (!room || room.sensei !== socket.id) return;
-
-        io.to(targetSocketId).emit('remote_mute_trigger');
+        
+        // Kirim perintah ke siswa spesifik
+        io.to(targetSocketId).emit('remote_mute_control', muteState);
+        
+        // Broadcast ke sensei saja untuk update UI realtime (jika diperlukan)
+        // Namun kita akan gunakan broadcast room_users_update untuk reaktovitas penuh
     });
 
     // Request daftar siswa untuk manager
