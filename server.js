@@ -69,7 +69,14 @@ io.on('connection', (socket) => {
         };
 
         // Masukkan Sensei ke list users juga biar seragam
-        rooms[roomId].users.push({ id: socket.id, name: name, role: 'sensei', isInVoice: false, deviceId});
+        rooms[roomId].users.push({ 
+            id: socket.id, 
+            name: name, 
+            role: 'sensei', 
+            isInVoice: false, 
+            deviceId: deviceId,
+            isMutedBySensei: false 
+        });
 
         socket.join(roomId);
         // Kirim konfirmasi ke pembuat
@@ -81,7 +88,7 @@ io.on('connection', (socket) => {
             isAnswerHidden: true
         });
 
-        io.emit('update_public_rooms', getPublicRooms());
+        io.to(roomId).emit('update_user_count', rooms[roomId].users.length);
     });
 
     // 2. GABUNG KELAS (Siswa)
