@@ -50,10 +50,10 @@ io.on('connection', (socket) => {
                         });
                     } else {
                         // SIDIK JARI BEDA: Tolak akses pembajakan!
-                        return socket.emit('error_msg', '⚠️ KEAMANAN: Identitas Sensei ini sudah terkunci pada perangkat lain!');
+                        return socket.emit('error_msg', { msgCode: 'err_security_sensei' });
                     }
                 }
-                return socket.emit('error_msg', '❌ Room ID sudah digunakan oleh Sensei lain!');
+                return socket.emit('error_msg', { msgCode: 'err_room_taken' });
             }
 
         rooms[roomId] = {
@@ -94,21 +94,21 @@ io.on('connection', (socket) => {
     // 2. GABUNG KELAS (Siswa)
     socket.on('join_room', ({ name, roomId, password, deviceId }) => { // TAMBAHKAN deviceId di sini
         const room = rooms[roomId];
-        if (!room) return socket.emit('error_msg', '❌ Room Not Found');
+        if (!room) return socket.emit('error_msg', { msgCode: 'err_room_not_found' });
 
         // Cek Kick Permanen (Berdasarkan Fingerprint atau Nama)
         if (room.bannedDevices && room.bannedDevices.includes(deviceId)) {
-            return socket.emit('error_msg', '🚫 Anda dilarang masuk ke kelas ini secara permanen.');
+            return socket.emit('error_msg', { msgCode: 'err_banned_perm' });
         }
         const banKey = `${roomId}_${deviceId}`;
         if (tempBans[banKey] && Date.now() < tempBans[banKey]) {
             const remaining = Math.ceil((tempBans[banKey] - Date.now()) / 60000);
-            return socket.emit('error_msg', `⏰ Anda masih dilarang masuk selama ${remaining} menit lagi.`);
-        }
-        if (room.password && room.password !== password) return socket.emit('error_msg', '🔒 Wrong Password/Salah');
+            return socket.emit('error_msg', { msgCode: 'err_temp_ban', duration: remaining });
+}
+        if (room.password && room.password !== password) return socket.emit('error_msg', { msgCode: 'err_wrong_pass' });
         
         if (name === room.senseiName) {
-            return socket.emit('error_msg', '❌ Nama ini adalah nama Sensei, gunakan nama lain!');
+            return socket.emit('error_msg', { msgCode: 'err_name_is_sensei' });
         }
 
         const existingUser = room.users.find(u => u.name === name);
