@@ -401,7 +401,7 @@ function getPublicRooms() {
         .map(id => ({
             id: id,
             name: rooms[id].senseiName + "'s Class",
-            users: rooms[id].users.length + 1
+            users: rooms[id].users.length
         }));
 }
 
