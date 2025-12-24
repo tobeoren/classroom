@@ -207,12 +207,17 @@ io.on('connection', (socket) => {
         if (type === 'permanent') {
             if (!room.bannedDevices) room.bannedDevices = [];
             room.bannedDevices.push(deviceId);
-            io.to(targetSocketId).emit('force_leave', '🚫 Anda telah di-banned permanen.');
+            io.to(targetSocketId).emit('force_leave', { 
+                msgCode: 'ban_perm' 
+            });
         } else {
             const minutes = parseInt(duration) || 1;
             const banKey = `${roomId}_${deviceId}`;
             tempBans[banKey] = Date.now() + (minutes * 60000); // Set waktu buka ban
-            io.to(targetSocketId).emit('force_leave', `⏰ Anda dikeluarkan selama ${minutes} menit.`);
+            io.to(targetSocketId).emit('force_leave', { 
+                msgCode: 'kick_temp', 
+                duration: minutes 
+            });
         }
         
         // Hapus user dari memory room segera
