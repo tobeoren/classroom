@@ -11,10 +11,14 @@ const path = require('path');
 app.use(helmet());
 
 // B. CORS: Mengunci akses hanya untuk domain Anda
+const allowedOrigins = [
+    "https://japlearn.netlify.app",      
+    "https://japlearn-beta.netlify.app"
+];
 app.use(cors({
-    origin: "https://japlearn.netlify.app", // Ganti dengan domain asli Anda
+    origin: allowedOrigins,
     methods: ["GET", "POST"]
-}))
+}));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 menit
@@ -25,9 +29,12 @@ app.use(limiter);
 
 const server = http.createServer(app);
 const io = new Server(server, { 
-    cors: { origin: "*" },
-    pingTimeout: 60000, // Tunggu 60 detik sebelum dianggap mati
-    pingInterval: 25000 // Kirim ping setiap 25 detik
+    cors: { 
+        origin: allowedOrigins, // Menggunakan daftar yang sama
+        methods: ["GET", "POST"]
+    },
+    pingTimeout: 60000, 
+    pingInterval: 25000 
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
