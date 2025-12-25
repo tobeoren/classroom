@@ -1,9 +1,18 @@
 const express = require('express');
+const app = express();
+const rateLimit = require("express-rate-limit");
 const http = require('http');
 const { Server } = require("socket.io");
 const path = require('path');
 
-const app = express();
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 menit
+  max: 100, // Maksimal 100 koneksi per IP per 15 menit
+  message: "Terlalu banyak permintaan dari IP ini, coba lagi nanti."
+});
+
+app.use(limiter);
+
 const server = http.createServer(app);
 const io = new Server(server, { 
     cors: { origin: "*" },
@@ -17,6 +26,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Format: { roomId: { sensei: socketId, users: [], currentQuestion: {}, isAnswerHidden: true, password: '', isPublic: true } }
 let rooms = {};
 let tempBans = {};
+let lastMessageTime = {};
 
 // Helper: Ambil list user di dalam voice room
 function getVoiceParticipants(roomId) {
@@ -173,6 +183,11 @@ io.on('connection', (socket) => {
 
     // 5. CHAT & JAWABAN
     socket.on('send_message', ({ roomId, message, sender, role }) => {
+        const now = Date.now();
+        if (lastMessageTime[socket.id] && (now - lastMessageTime[socket.id] < 500)) { // limit 0.5 detik
+            return socket.emit('error_msg', 'Jangan spam chat!');
+        }
+        lastMessageTime[socket.id] = now;
         const room = rooms[roomId];
         if (!room) return;
 
