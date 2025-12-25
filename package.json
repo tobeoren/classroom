@@ -1,17 +1,17 @@
 {
-  "name": "manabu-classroom-server",
+  "name": "manabu-classroom",
   "version": "1.0.0",
-  "description": "Realtime Classroom for Manabu",
+  "description": "Realtime Classroom",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.7.2",
-    "xss": "^1.0.14"
+    "express-rate-limit": "^7.1.5",
+    "socket.io": "^4.7.2"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   }
 }
