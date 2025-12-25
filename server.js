@@ -1,16 +1,26 @@
 const express = require('express');
 const app = express();
+const helmet = require("helmet");
+const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const http = require('http');
 const { Server } = require("socket.io");
 const path = require('path');
+
+// A. Helmet: Melindungi header HTTP
+app.use(helmet());
+
+// B. CORS: Mengunci akses hanya untuk domain Anda
+app.use(cors({
+    origin: "https://japlearn.netlify.app", // Ganti dengan domain asli Anda
+    methods: ["GET", "POST"]
+}))
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 menit
   max: 100, // Maksimal 100 koneksi per IP per 15 menit
   message: "Terlalu banyak permintaan dari IP ini, coba lagi nanti."
 });
-
 app.use(limiter);
 
 const server = http.createServer(app);
@@ -19,7 +29,6 @@ const io = new Server(server, {
     pingTimeout: 60000, // Tunggu 60 detik sebelum dianggap mati
     pingInterval: 25000 // Kirim ping setiap 25 detik
 });
-
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- MEMORY STORAGE ---
